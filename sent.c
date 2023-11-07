@@ -109,6 +109,7 @@ static void xhints(void);
 static void xinit(void);
 static void xloadfonts(void);
 static void xresources(void);
+static void togglescm();
 
 static void bpress(XEvent *);
 static void cmessage(XEvent *);
@@ -613,6 +614,23 @@ xhints(void)
 	XSetWMProperties(xw.dpy, xw.win, NULL, NULL, NULL, 0, sizeh, &wm, &class);
 	XFree(sizeh);
 }
+
+void
+togglescm()
+{
+    if (use_inverted_colors) {
+        free(sc);
+        sc = drw_scm_create(d, colors, 2);
+        use_inverted_colors = 0;
+    } else {
+        sc = drw_scm_create(d, inverted_colors, 2);
+        use_inverted_colors = 1;
+    }
+    drw_setscheme(d, sc);
+       XSetWindowBackground(xw.dpy, xw.win, sc[ColBg].pixel);
+    xdraw();
+}
+
 
 void
 xinit(void)
