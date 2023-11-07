@@ -1,0 +1,5 @@
+config.h
+drw.o
+sent
+sent.o
+util.o
