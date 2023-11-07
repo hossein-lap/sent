@@ -1,4 +1,5 @@
 /* See LICENSE file for copyright and license details. */
+#include <X11/X.h>
 #define MAXFONTS 10
 static char *fontfallbacks[MAXFONTS] = {
 	"ubuntu",
@@ -58,7 +59,8 @@ static Shortcut shortcuts[] = {
 	{ XK_n,           advance,        {.i = +1} },
 	{ XK_p,           advance,        {.i = -1} },
 	{ XK_r,           reload,         {0} },
-	{ XK_i,           togglescm,      {0} },
+	{ ControlMask|XK_i,           togglescm,      {0} },
+	{ ControlMask|XK_g,           pdf,            {0} },
 };
 
 static Filter filters[] = {

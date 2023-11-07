@@ -29,7 +29,7 @@ cscope: ${SRC} config.h
 	cscope -R -b || echo cScope not installed
 
 clean:
-	rm -f sent ${OBJ} sent-${VERSION}.tar.gz config.h *.reg *.orig
+	rm -f sent ${OBJ} sent-${VERSION}.tar.gz *.rej *.orig config.h
 
 dist: clean
 	mkdir -p sent-${VERSION}
