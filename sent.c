@@ -30,7 +30,6 @@ char *argv0;
 #define LEN(a)         (sizeof(a) / sizeof(a)[0])
 #define LIMIT(x, a, b) (x) = (x) < (a) ? (a) : (x) > (b) ? (b) : (x)
 #define MAXFONTSTRLEN  128
-#define MAXFONTS 10
 
 typedef enum {
 	NONE = 0,
@@ -581,6 +580,12 @@ xdraw(void)
 			         0,
 			         slides[idx].lines[i],
 			         0);
+		if (idx != 0 && progressheight != 0) {
+			drw_rect(d,
+			         0, xw.h - progressheight,
+			         (xw.w * idx)/(slidecount - 1), progressheight,
+			         1, 0);
+		}
 		drw_map(d, xw.win, 0, 0, xw.w, xw.h);
 	} else {
 		if (!(im->state & SCALED))
