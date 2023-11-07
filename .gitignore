@@ -1,5 +1,5 @@
 config.h
-drw.o
 sent
-sent.o
-util.o
+*.o
+*.orig
+*.rej
