@@ -26,6 +26,8 @@
 
 char *argv0;
 
+int use_inverted_colors = 0;
+
 /* macros */
 #define LEN(a)         (sizeof(a) / sizeof(a)[0])
 #define LIMIT(x, a, b) (x) = (x) < (a) ? (a) : (x) > (b) ? (b) : (x)
@@ -640,7 +642,11 @@ xinit(void)
 
 	if (!(d = drw_create(xw.dpy, xw.scr, xw.win, xw.w, xw.h)))
 		die("sent: Unable to create drawing context");
-	sc = drw_scm_create(d, colors, 2);
+	if (use_inverted_colors) {
+		sc = drw_scm_create(d, inverted_colors, 2);
+	} else {
+		sc = drw_scm_create(d, colors, 2);
+	}
 	drw_setscheme(d, sc);
 	XSetWindowBackground(xw.dpy, xw.win, sc[ColBg].pixel);
 
@@ -706,6 +712,10 @@ xresources(void) {
 			colors[0] = strdup(xval.addr);
 		if (XrmGetResource(xdb, "sent.background", "*", &type, &xval))
 			colors[1] = strdup(xval.addr);
+		if (XrmGetResource(xdb, "sent.foreground.invert", "*", &type, &xval))
+			inverted_colors[0] = strdup(xval.addr);
+		if (XrmGetResource(xdb, "sent.background.invert", "*", &type, &xval))
+			inverted_colors[1] = strdup(xval.addr);
 		XrmDestroyDatabase(xdb);
 	}
 }
@@ -770,6 +780,9 @@ main(int argc, char *argv[])
 	case 'v':
 		fprintf(stderr, "sent-"VERSION"\n");
 		return 0;
+	case 'i':
+		use_inverted_colors = 1;
+		break;
 	default:
 		usage();
 	} ARGEND
