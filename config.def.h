@@ -25,8 +25,8 @@ static const char *inverted_colors[] = {
 static const float linespacing = 1.4;
 
 /* how much screen estate is to be used at max for the content */
-static const float usablewidth = 0.90;
-static const float usableheight = 0.90;
+static const float usablewidth = 0.60;
+static const float usableheight = 0.60;
 
 /* height of the presentation progress bar */
 static int progressheight = 5;
