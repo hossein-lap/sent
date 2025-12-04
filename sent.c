@@ -18,12 +18,20 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xft/Xft.h>
+#include <X11/Xresource.h>
+#include <fribidi.h>
+
+#include <cairo/cairo.h>
+#include <cairo/cairo-xlib.h>
+#include <cairo/cairo-pdf.h>
 
 #include "arg.h"
 #include "util.h"
 #include "drw.h"
 
 char *argv0;
+
+int use_inverted_colors = 0;
 
 /* macros */
 #define LEN(a)         (sizeof(a) / sizeof(a)[0])
@@ -97,6 +105,7 @@ static void cleanup(int slidesonly);
 static void reload(const Arg *arg);
 static void load(FILE *fp);
 static void advance(const Arg *arg);
+static void pdf();
 static void quit(const Arg *arg);
 static void resize(int width, int height);
 static void run(void);
@@ -105,6 +114,8 @@ static void xdraw(void);
 static void xhints(void);
 static void xinit(void);
 static void xloadfonts(void);
+static void xresources(void);
+static void togglescm();
 
 static void bpress(XEvent *);
 static void cmessage(XEvent *);
@@ -117,6 +128,7 @@ static void configure(XEvent *);
 
 /* Globals */
 static const char *fname = NULL;
+static char fribidi_text[BUFSIZ] = "";
 static Slide *slides = NULL;
 static int idx = 0;
 static int slidecount = 0;
@@ -133,6 +145,26 @@ static void (*handler[LASTEvent])(XEvent *) = {
 	[Expose] = expose,
 	[KeyPress] = kpress,
 };
+
+static void
+apply_fribidi(char *str)
+{
+        FriBidiStrIndex len = strlen(str);
+        FriBidiChar logical[BUFSIZ];
+        FriBidiChar visual[BUFSIZ];
+        FriBidiParType base = FRIBIDI_PAR_ON;
+        FriBidiCharSet charset;
+        fribidi_boolean result;
+
+        fribidi_text[0] = 0;
+        if (len>0)
+        {
+                charset = fribidi_parse_charset("UTF-8");
+                len = fribidi_charset_to_unicode(charset, str, len, logical);
+                result = fribidi_log2vis(logical, len, &base, visual, NULL, NULL, NULL);
+                len = fribidi_unicode_to_charset(charset, visual, len, fribidi_text);
+        }
+}
 
 int
 filter(int fd, const char *cmd)
@@ -284,27 +316,66 @@ ffprepare(Image *img)
 	img->state |= SCALED;
 }
 
+static unsigned char double_to_uchar_clamp255(double dbl)
+{
+	dbl = round(dbl);
+
+	return
+		(dbl < 0.0)   ? 0 :
+		(dbl > 255.0) ? 255 : (unsigned char)dbl;
+}
+
+static int int_clamp(int integer, int lower, int upper)
+{
+	if (integer < lower)
+		return lower;
+	else if (integer >= upper)
+		return upper - 1;
+	else
+		return integer;
+}
+
 void
 ffscale(Image *img)
 {
-	unsigned int x, y;
-	unsigned int width = img->ximg->width;
-	unsigned int height = img->ximg->height;
-	char* newBuf = img->ximg->data;
-	unsigned char* ibuf;
-	unsigned int jdy = img->ximg->bytes_per_line / 4 - width;
-	unsigned int dx = (img->bufwidth << 10) / width;
+	const unsigned width = img->ximg->width;
+	const unsigned height = img->ximg->height;
+	unsigned char* newBuf = (unsigned char*)img->ximg->data;
+	const unsigned jdy = img->ximg->bytes_per_line / 4 - width;
 
-	for (y = 0; y < height; y++) {
-		unsigned int bufx = img->bufwidth / width;
-		ibuf = &img->buf[y * img->bufheight / height * img->bufwidth * 3];
+	const double x_scale = ((double)img->bufwidth/(double)width);
+	const double y_scale = ((double)img->bufheight/(double)height);
 
-		for (x = 0; x < width; x++) {
-			*newBuf++ = (ibuf[(bufx >> 10)*3+2]);
-			*newBuf++ = (ibuf[(bufx >> 10)*3+1]);
-			*newBuf++ = (ibuf[(bufx >> 10)*3+0]);
+	for (unsigned y = 0; y < height; ++y) {
+		const double old_y = (double)y * y_scale;
+		const double y_factor = ceil(old_y) - old_y;
+		const int old_y_int_0 = int_clamp((int)floor(old_y), 0, img->bufheight);
+		const int old_y_int_1 = int_clamp((int)ceil(old_y), 0, img->bufheight);
+
+		for (unsigned x = 0; x < width; ++x) {
+			const double old_x = (double)x * x_scale;
+			const double x_factor = ceil(old_x) - old_x;
+			const int old_x_int_0 = int_clamp((int)floor(old_x), 0, img->bufwidth);
+			const int old_x_int_1 = int_clamp((int)ceil(old_x), 0, img->bufwidth);
+
+			const unsigned c00_pos = 3*((old_x_int_0) + ((old_y_int_0)*img->bufwidth));
+			const unsigned c01_pos = 3*((old_x_int_0) + ((old_y_int_1)*img->bufwidth));
+			const unsigned c10_pos = 3*((old_x_int_1) + ((old_y_int_0)*img->bufwidth));
+			const unsigned c11_pos = 3*((old_x_int_1) + ((old_y_int_1)*img->bufwidth));
+
+			for (int i = 2; i >= 0 ; --i) {
+				const unsigned char c00 = img->buf[c00_pos + i];
+				const unsigned char c01 = img->buf[c01_pos + i];
+				const unsigned char c10 = img->buf[c10_pos + i];
+				const unsigned char c11 = img->buf[c11_pos + i];
+
+				const double x_result_0 = (double)c00*x_factor + (double)c10*(1.0 - x_factor);
+				const double x_result_1 = (double)c01*x_factor + (double)c11*(1.0 - x_factor);
+				const double result = x_result_0*y_factor + x_result_1*(1.0 - y_factor);
+
+				*newBuf++ = double_to_uchar_clamp255(result);
+			}
 			newBuf++;
-			bufx += dx;
 		}
 		newBuf += jdy;
 	}
@@ -430,10 +501,6 @@ load(FILE *fp)
 		maxlines = 0;
 		memset((s = &slides[slidecount]), 0, sizeof(Slide));
 		do {
-			/* if there's a leading null, we can't do blen-1 */
-			if (buf[0] == '\0')
-				continue;
-
 			if (buf[0] == '#')
 				continue;
 
@@ -479,6 +546,42 @@ advance(const Arg *arg)
 		idx = new_idx;
 		xdraw();
 	}
+}
+
+void
+pdf()
+{
+	const Arg next = { .i = 1 };
+	Arg first;
+	cairo_surface_t *cs;
+
+	if (!fname)
+		fname = "slides";
+
+	char filename[strlen(fname) + 5];
+	sprintf(filename, "%s.pdf", fname);
+	cairo_surface_t *pdf = cairo_pdf_surface_create(filename, xw.w, xw.h);
+
+	cairo_t *cr = cairo_create(pdf);
+
+	first.i = -idx;
+	advance(&first);
+
+	cs = cairo_xlib_surface_create(xw.dpy, xw.win, xw.vis, xw.w, xw.h);
+	cairo_set_source_surface(cr, cs, 0.0, 0.0);
+	for (int i = 0; i < slidecount; ++i) {
+		cairo_paint(cr);
+		cairo_show_page(cr);
+		cairo_surface_flush(cs);
+		advance(&next);
+		cairo_surface_mark_dirty(cs);
+	}
+	cairo_surface_destroy(cs);
+
+	cairo_destroy(cr);
+	cairo_surface_destroy(pdf);
+	first.i = -(slidecount-1);
+	advance(&first);
 }
 
 void
@@ -530,15 +633,23 @@ xdraw(void)
 
 	if (!im) {
 		drw_rect(d, 0, 0, xw.w, xw.h, 1, 1);
-		for (i = 0; i < slides[idx].linecount; i++)
+		for (i = 0; i < slides[idx].linecount; i++) {
+			apply_fribidi(slides[idx].lines[i]);
 			drw_text(d,
 			         (xw.w - width) / 2,
 			         (xw.h - height) / 2 + i * linespacing * d->fonts->h,
 			         width,
 			         d->fonts->h,
 			         0,
-			         slides[idx].lines[i],
+			         fribidi_text,
 			         0);
+		}
+		if (idx != 0 && progressheight != 0) {
+			drw_rect(d,
+			         0, xw.h - progressheight,
+			         (xw.w * idx)/(slidecount - 1), progressheight,
+			         1, 0);
+		}
 		drw_map(d, xw.win, 0, 0, xw.w, xw.h);
 	} else {
 		if (!(im->state & SCALED))
@@ -566,6 +677,23 @@ xhints(void)
 }
 
 void
+togglescm()
+{
+    if (use_inverted_colors) {
+        free(sc);
+        sc = drw_scm_create(d, colors, 2);
+        use_inverted_colors = 0;
+    } else {
+        sc = drw_scm_create(d, inverted_colors, 2);
+        use_inverted_colors = 1;
+    }
+    drw_setscheme(d, sc);
+       XSetWindowBackground(xw.dpy, xw.win, sc[ColBg].pixel);
+    xdraw();
+}
+
+
+void
 xinit(void)
 {
 	XTextProperty prop;
@@ -573,6 +701,7 @@ xinit(void)
 
 	if (!(xw.dpy = XOpenDisplay(NULL)))
 		die("sent: Unable to open display");
+	xresources();
 	xw.scr = XDefaultScreen(xw.dpy);
 	xw.vis = XDefaultVisual(xw.dpy, xw.scr);
 	resize(DisplayWidth(xw.dpy, xw.scr), DisplayHeight(xw.dpy, xw.scr));
@@ -592,7 +721,11 @@ xinit(void)
 
 	if (!(d = drw_create(xw.dpy, xw.scr, xw.win, xw.w, xw.h)))
 		die("sent: Unable to create drawing context");
-	sc = drw_scm_create(d, colors, 2);
+	if (use_inverted_colors) {
+		sc = drw_scm_create(d, inverted_colors, 2);
+	} else {
+		sc = drw_scm_create(d, colors, 2);
+	}
 	drw_setscheme(d, sc);
 	XSetWindowBackground(xw.dpy, xw.win, sc[ColBg].pixel);
 
@@ -630,6 +763,40 @@ xloadfonts(void)
 
 	for (j = 0; j < LEN(fontfallbacks); j++)
 		free(fstrs[j]);
+}
+
+void
+xresources(void) {
+	XrmInitialize();
+	char* xrm;
+	if ((xrm = XResourceManagerString(xw.dpy))) {
+		char *type;
+		XrmDatabase xdb = XrmGetStringDatabase(xrm);
+		XrmValue xval;
+		if (XrmGetResource(xdb, "sent.font", "*", &type, &xval)) {
+			int fc = 0;
+			char *token;
+			char *delimiter = ",";
+			char *font_string = (char *)xval.addr;
+
+			// Tokenize the font names and store them in the array
+			token = strtok(font_string, delimiter);
+			while (token != NULL && fc < MAXFONTS) {
+				fontfallbacks[fc] = strdup(token);
+				fc++;
+				token = strtok(NULL, delimiter);
+			}
+		}
+		if (XrmGetResource(xdb, "sent.foreground", "*", &type, &xval))
+			colors[0] = strdup(xval.addr);
+		if (XrmGetResource(xdb, "sent.background", "*", &type, &xval))
+			colors[1] = strdup(xval.addr);
+		if (XrmGetResource(xdb, "sent.foreground.invert", "*", &type, &xval))
+			inverted_colors[0] = strdup(xval.addr);
+		if (XrmGetResource(xdb, "sent.background.invert", "*", &type, &xval))
+			inverted_colors[1] = strdup(xval.addr);
+		XrmDestroyDatabase(xdb);
+	}
 }
 
 void
@@ -680,7 +847,8 @@ configure(XEvent *e)
 void
 usage(void)
 {
-	die("usage: %s [file]", argv0);
+	die("usage: %s [-i] [-c fgcolor] [-b bgcolor] [-g bgcolor_i]"
+	    " [-f fgcolor_i] [-f font] [file]", argv0);
 }
 
 int
@@ -692,6 +860,24 @@ main(int argc, char *argv[])
 	case 'v':
 		fprintf(stderr, "sent-"VERSION"\n");
 		return 0;
+	case 'f':
+		fontfallbacks[0] = EARGF(usage());
+		break;
+	case 'c':
+		colors[0] = EARGF(usage());
+		break;
+	case 'b':
+		colors[1] = EARGF(usage());
+		break;
+	case 'r':
+		inverted_colors[0] = EARGF(usage());
+		break;
+	case 'g':
+		inverted_colors[1] = EARGF(usage());
+		break;
+	case 'i':
+		use_inverted_colors = 1;
+		break;
 	default:
 		usage();
 	} ARGEND

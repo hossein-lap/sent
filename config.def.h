@@ -1,14 +1,23 @@
 /* See LICENSE file for copyright and license details. */
-
-static char *fontfallbacks[] = {
-	"dejavu sans",
-	"roboto",
+#include <X11/X.h>
+#define MAXFONTS 10
+static char *fontfallbacks[MAXFONTS] = {
 	"ubuntu",
+	"Sahel:Bold",
+	"JoyPixels",
+	"Noto Color Emoji",
+	"liberation sans",
+	"FreeSans",
 };
 #define NUMFONTSCALES 42
 #define FONTSZ(x) ((int)(10.0 * powf(1.1288, (x)))) /* x in [0, NUMFONTSCALES-1] */
 
 static const char *colors[] = {
+	"#FFFFFF", /* foreground color */
+	"#000000", /* background color */
+};
+
+static const char *inverted_colors[] = {
 	"#000000", /* foreground color */
 	"#FFFFFF", /* background color */
 };
@@ -16,8 +25,11 @@ static const char *colors[] = {
 static const float linespacing = 1.4;
 
 /* how much screen estate is to be used at max for the content */
-static const float usablewidth = 0.75;
-static const float usableheight = 0.75;
+static const float usablewidth = 0.60;
+static const float usableheight = 0.60;
+
+/* height of the presentation progress bar */
+static int progressheight = 5;
 
 static Mousekey mshortcuts[] = {
 	/* button         function        argument */
@@ -28,25 +40,27 @@ static Mousekey mshortcuts[] = {
 };
 
 static Shortcut shortcuts[] = {
-	/* keysym         function        argument */
-	{ XK_Escape,      quit,           {0} },
-	{ XK_q,           quit,           {0} },
-	{ XK_Right,       advance,        {.i = +1} },
-	{ XK_Left,        advance,        {.i = -1} },
-	{ XK_Return,      advance,        {.i = +1} },
-	{ XK_space,       advance,        {.i = +1} },
-	{ XK_BackSpace,   advance,        {.i = -1} },
-	{ XK_l,           advance,        {.i = +1} },
-	{ XK_h,           advance,        {.i = -1} },
-	{ XK_j,           advance,        {.i = +1} },
-	{ XK_k,           advance,        {.i = -1} },
-	{ XK_Down,        advance,        {.i = +1} },
-	{ XK_Up,          advance,        {.i = -1} },
-	{ XK_Next,        advance,        {.i = +1} },
-	{ XK_Prior,       advance,        {.i = -1} },
-	{ XK_n,           advance,        {.i = +1} },
-	{ XK_p,           advance,        {.i = -1} },
-	{ XK_r,           reload,         {0} },
+	/* keysym           function        argument */
+	{ XK_Escape,        quit,           {0} },
+	{ XK_q,             quit,           {0} },
+	{ XK_Right,         advance,        {.i = +1} },
+	{ XK_Left,          advance,        {.i = -1} },
+	{ XK_Return,        advance,        {.i = +1} },
+	{ XK_space,         advance,        {.i = +1} },
+	{ XK_BackSpace,     advance,        {.i = -1} },
+	{ XK_l,             advance,        {.i = +1} },
+	{ XK_h,             advance,        {.i = -1} },
+	{ XK_j,             advance,        {.i = +1} },
+	{ XK_k,             advance,        {.i = -1} },
+	{ XK_Down,          advance,        {.i = +1} },
+	{ XK_Up,            advance,        {.i = -1} },
+	{ XK_Next,          advance,        {.i = +1} },
+	{ XK_Prior,         advance,        {.i = -1} },
+	{ XK_n,             advance,        {.i = +1} },
+	{ XK_p,             advance,        {.i = -1} },
+	{ XK_r,             reload,         {0} },
+	{ XK_i,             togglescm,      {0} },
+	{ XK_g,             pdf,            {0} },
 };
 
 static Filter filters[] = {

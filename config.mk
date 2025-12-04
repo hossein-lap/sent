@@ -7,17 +7,23 @@ VERSION = 1
 PREFIX = /usr/local
 MANPREFIX = ${PREFIX}/share/man
 
+PKG_CONFIG = pkg-config
+
 X11INC = /usr/X11R6/include
 X11LIB = /usr/X11R6/lib
 
+BDINC = /usr/include/fribidi
+BDLIBS = -lfribidi
+
 # includes and libs
-INCS = -I. -I/usr/include -I/usr/include/freetype2 -I${X11INC}
-LIBS = -L/usr/lib -lc -lm -L${X11LIB} -lXft -lfontconfig -lX11
+INCS = -I. -I/usr/include -I/usr/include/freetype2 -I${X11INC} -I$(BDINC)
+LIBS = -L/usr/lib -lc -lm -L${X11LIB} -lXft -lfontconfig -lX11 $(BDLIBS) -lcairo
 # OpenBSD (uncomment)
-#INCS = -I. -I${X11INC} -I${X11INC}/freetype2
+# INCS = -I. -I${X11INC} -I${X11INC}/freetype2 `${PKG_CONFIG} --cflags cairo`
+# LIBS += -L/usr/local/lib
 # FreeBSD (uncomment)
-#INCS = -I. -I/usr/local/include -I/usr/local/include/freetype2 -I${X11INC}
-#LIBS = -L/usr/local/lib -lc -lm -L${X11LIB} -lXft -lfontconfig -lX11
+#INCS = -I. -I/usr/local/include -I/usr/local/include/freetype2 -I${X11INC} -I/usr/local/include/fribidi
+#LIBS = -L/usr/local/lib -lc -lm -L${X11LIB} -lXft -lfontconfig -lX11 $(BDLIBS)
 
 # flags
 CPPFLAGS = -DVERSION=\"${VERSION}\" -D_XOPEN_SOURCE=600

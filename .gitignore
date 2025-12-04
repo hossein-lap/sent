@@ -1,0 +1,9 @@
+config.h
+sent
+*.o
+*.orig
+*.rej
+*~
+\#*\#
+*.pdf
+.session.vim
